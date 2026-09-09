@@ -20,14 +20,12 @@ iPhone этим APK не закрыть. Там USB Restricted Mode в сист�
 
 ### Онлайн (GitHub Actions)
 
-На этой машине SDK нет — APK собирает GitHub.
+Один workflow **Build** собирает оба края:
 
-1. Запушьте workflow `.github/workflows/android.yml` в репозиторий.
-2. Откройте [Actions](https://github.com/mikhail-1c/kabel-strazh/actions).
-3. Слева **Android** → **Run workflow** → ветка `cursor/android-usb-cable-guard` → **Run workflow**.
-4. Когда зелёное — внизу прогона **Artifacts** → `kabel-strazh-debug` → скачайте zip с `app-debug.apk`.
+- Android: `kabel-strazh-android-debug` — `app-debug.apk` на свой телефон.
+- iPhone: `kabel-strazh-ios-simulator` — `.app` для симулятора Xcode. На живой iPhone третье приложение **не режет USB**; это чеклист системных защит. Чтобы поставить на свой аппарат, откройте `ios/KabelStrazh.xcodeproj` на Mac и подпишите своим Apple ID.
 
-Тот же job сам стартует на каждый push. Это debug-сборка без вашей подписи: для своего телефона через «установку из неизвестных источников» годится, в Play Store — нет.
+Прогоны: [Actions](https://github.com/mikhail-1c/kabel-strazh/actions).
 
 ### Локально
 
