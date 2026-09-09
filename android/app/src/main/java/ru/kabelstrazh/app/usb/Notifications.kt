@@ -17,6 +17,7 @@ object Notifications {
     const val CHANNEL_ALERT = "alert"
     const val ID_FOREGROUND = 41
     const val ID_ALERT = 42
+    const val ID_PLUG = 43
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -62,20 +63,41 @@ object Notifications {
             .build()
     }
 
-    fun leakAlert(context: Context, detail: String): Notification {
+    fun leakAlert(context: Context, detail: String, fullscreen: Boolean = true): Notification {
         val fullScreen = PendingIntent.getActivity(
             context,
             1,
             Intent(context, UsbAlertActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(context, CHANNEL_ALERT)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ALERT)
             .setSmallIcon(R.drawable.ic_shield)
             .setContentTitle("Кабель открыл данные без разрешения")
             .setContentText(detail)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setFullScreenIntent(fullScreen, true)
+            .setAutoCancel(true)
+        if (fullscreen) {
+            builder.setFullScreenIntent(fullScreen, true)
+        } else {
+            builder.setContentIntent(fullScreen)
+        }
+        return builder.build()
+    }
+
+    fun plugAlert(context: Context): Notification {
+        val tap = PendingIntent.getActivity(
+            context,
+            2,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Builder(context, CHANNEL_ALERT)
+            .setSmallIcon(R.drawable.ic_shield)
+            .setContentTitle("Вставлен кабель")
+            .setContentText("Проверьте, что данные не открылись")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(tap)
             .setAutoCancel(true)
             .build()
     }

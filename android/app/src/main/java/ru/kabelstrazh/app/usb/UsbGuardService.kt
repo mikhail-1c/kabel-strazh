@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import ru.kabelstrazh.app.KabelStrazhApp
 import ru.kabelstrazh.app.domain.AllowWindow
+import ru.kabelstrazh.app.domain.GuardSettings
 import ru.kabelstrazh.app.domain.GuardStatus
 import ru.kabelstrazh.app.domain.GuardUiState
 import ru.kabelstrazh.app.domain.JournalKind
@@ -53,23 +54,30 @@ class UsbGuardService : LifecycleService() {
             combine(
                 UsbMonitor.snapshots(this@UsbGuardService),
                 store.allowWindow,
-                store.policyEnforced,
-            ) { snapshot, allow, policyOn ->
-                Triple(snapshot, allow, policyOn)
-            }.collectLatest { (snapshot, allow, policyOn) ->
+                store.settings,
+            ) { snapshot, allow, settings ->
+                Triple(snapshot, allow, settings)
+            }.collectLatest { (snapshot, allow, settings) ->
                 val now = System.currentTimeMillis()
                 val state = GuardUiState(
                     snapshot = snapshot,
                     allow = allow,
                     nowMs = now,
                     deviceOwner = policy.isDeviceOwner(),
-                    policyEnforced = policyOn,
+                    settings = settings,
                 )
                 applyPolicy(state)
-                rememberTransitions(snapshot, allow, now)
+                rememberTransitions(snapshot, allow, settings, now)
                 updateNotification(state)
                 if (state.status == GuardStatus.DataLeak && lastStatus != GuardStatus.DataLeak) {
-                    raiseLeak(snapshot)
+                    raiseLeak(snapshot, settings)
+                } else if (
+                    settings.alertOnAnyPlug &&
+                    snapshot.connected &&
+                    lastConnected != true &&
+                    state.status != GuardStatus.DataLeak
+                ) {
+                    raisePlug(settings)
                 }
                 lastStatus = state.status
                 watchExpiry(allow)
@@ -79,32 +87,44 @@ class UsbGuardService : LifecycleService() {
 
     private fun applyPolicy(state: GuardUiState) {
         if (!state.deviceOwner || !state.policyEnforced) return
-        if (state.allow.isActive(state.nowMs)) {
+        if (state.allow.isActive(state.nowMs) && state.canGrantAllow) {
             policy.unlockData()
         } else {
             policy.lockData()
         }
     }
 
-    private suspend fun rememberTransitions(snapshot: UsbSnapshot, allow: AllowWindow, now: Long) {
+    private suspend fun rememberTransitions(
+        snapshot: UsbSnapshot,
+        allow: AllowWindow,
+        settings: GuardSettings,
+        now: Long,
+    ) {
         val connected = snapshot.connected
         if (lastConnected != connected) {
             if (connected) {
                 store.append(JournalKind.Plugged, "Кабель подключён")
-                if (!snapshot.dataExposed) {
+                if (!settings.seesData(snapshot)) {
                     store.append(JournalKind.ChargeOnly, "Режим: только заряд")
                 }
             } else if (lastConnected == true) {
                 store.append(JournalKind.Unplugged, "Кабель отключён")
+                if (settings.closeWindowOnUnplug && allow.isActive(now)) {
+                    store.clearAllow()
+                    store.append(JournalKind.AllowExpired, "Окно закрыто: кабель вынули")
+                    if (policy.isDeviceOwner()) {
+                        policy.lockData()
+                    }
+                }
             }
         }
         lastConnected = connected
 
-        val data = snapshot.dataExposed
+        val data = settings.seesData(snapshot)
         if (lastData != data && data) {
-            val allowed = allow.isActive(now)
+            val allowed = allow.isActive(now) && !(snapshot.adb && settings.treatAdbAsCritical)
             store.append(
-                if (allowed) JournalKind.DataOpened else JournalKind.DataOpened,
+                JournalKind.DataOpened,
                 "Каналы: ${UsbMonitor.dataChannels(snapshot)}" + if (allowed) " (окно открыто)" else " без разрешения",
             )
         }
@@ -115,18 +135,32 @@ class UsbGuardService : LifecycleService() {
         val manager = getSystemService(NotificationManager::class.java)
         val remain = state.allow.remainingMs(state.nowMs) / 1000
         val detail = when (state.status) {
-            GuardStatus.Idle -> "Жду кабель"
+            GuardStatus.Idle -> "Режим ${presetShort(state.settings)}"
             GuardStatus.ChargeOnly -> "Данные закрыты"
             GuardStatus.Allowed -> "Осталось ${remain}с"
-            GuardStatus.DataLeak -> "MTP/ADB/PTP без вашего окна"
+            GuardStatus.DataLeak -> "USB без вашего окна"
         }
         manager.notify(Notifications.ID_FOREGROUND, Notifications.guard(this, state.status, detail))
     }
 
-    private fun raiseLeak(snapshot: UsbSnapshot) {
+    private fun raiseLeak(snapshot: UsbSnapshot, settings: GuardSettings) {
         val detail = "Открыто: ${UsbMonitor.dataChannels(snapshot)}"
         val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(Notifications.ID_ALERT, Notifications.leakAlert(this, detail))
+        manager.notify(
+            Notifications.ID_ALERT,
+            Notifications.leakAlert(this, detail, settings.fullscreenOnLeak),
+        )
+        vibrateIfNeeded(settings)
+    }
+
+    private fun raisePlug(settings: GuardSettings) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(Notifications.ID_PLUG, Notifications.plugAlert(this))
+        vibrateIfNeeded(settings)
+    }
+
+    private fun vibrateIfNeeded(settings: GuardSettings) {
+        if (!settings.vibrateOnAlert) return
         val vibrator = getSystemService(Vibrator::class.java)
         vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 80, 80, 80, 80, 240), -1))
     }
@@ -143,5 +177,12 @@ class UsbGuardService : LifecycleService() {
                 policy.lockData()
             }
         }
+    }
+
+    private fun presetShort(settings: GuardSettings): String = when (settings.preset) {
+        ru.kabelstrazh.app.domain.ControlPreset.Balanced -> "обычный"
+        ru.kabelstrazh.app.domain.ControlPreset.Strict -> "жёсткий"
+        ru.kabelstrazh.app.domain.ControlPreset.Lockdown -> "замок"
+        ru.kabelstrazh.app.domain.ControlPreset.Custom -> "свой"
     }
 }

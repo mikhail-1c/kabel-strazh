@@ -42,6 +42,8 @@ enum class JournalKind {
     AllowExpired,
     PolicyOn,
     PolicyOff,
+    PresetApplied,
+    SettingsChanged,
 }
 
 data class GuardUiState(
@@ -49,14 +51,18 @@ data class GuardUiState(
     val allow: AllowWindow = AllowWindow(),
     val nowMs: Long = 0L,
     val deviceOwner: Boolean = false,
-    val policyEnforced: Boolean = false,
+    val settings: GuardSettings = GuardSettings(),
     val events: List<JournalEvent> = emptyList(),
-    val allowMinutes: Int = 5,
 ) {
+    val allowMinutes: Int get() = settings.allowMinutes
+    val policyEnforced: Boolean get() = settings.policyEnforced
+    val canGrantAllow: Boolean get() = !settings.forbidDataAllow && settings.allowMinutes > 0
+
     val status: GuardStatus
         get() = when {
             !snapshot.connected -> GuardStatus.Idle
-            snapshot.dataExposed && !allow.isActive(nowMs) -> GuardStatus.DataLeak
+            snapshot.adb && settings.treatAdbAsCritical -> GuardStatus.DataLeak
+            settings.seesData(snapshot) && !allow.isActive(nowMs) -> GuardStatus.DataLeak
             allow.isActive(nowMs) -> GuardStatus.Allowed
             else -> GuardStatus.ChargeOnly
         }

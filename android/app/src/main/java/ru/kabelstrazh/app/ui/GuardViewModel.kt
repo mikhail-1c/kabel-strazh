@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.kabelstrazh.app.KabelStrazhApp
 import ru.kabelstrazh.app.domain.AllowWindow
+import ru.kabelstrazh.app.domain.ControlPreset
+import ru.kabelstrazh.app.domain.GuardSettings
 import ru.kabelstrazh.app.domain.GuardUiState
 import ru.kabelstrazh.app.domain.JournalEvent
 import ru.kabelstrazh.app.domain.JournalKind
@@ -26,11 +28,10 @@ class GuardViewModel(application: Application) : AndroidViewModel(application) {
     private val persisted = combine(
         UsbMonitor.snapshots(application),
         store.allowWindow,
-        store.allowMinutesFlow,
-        store.policyEnforced,
+        store.settings,
         store.events,
-    ) { snapshot: UsbSnapshot, allow: AllowWindow, minutes: Int, policyOn: Boolean, events: List<JournalEvent> ->
-        PersistSlice(snapshot, allow, minutes, policyOn, events)
+    ) { snapshot: UsbSnapshot, allow: AllowWindow, settings: GuardSettings, events: List<JournalEvent> ->
+        PersistSlice(snapshot, allow, settings, events)
     }
 
     val state = combine(persisted, clock) { slice, now ->
@@ -39,9 +40,8 @@ class GuardViewModel(application: Application) : AndroidViewModel(application) {
             allow = slice.allow,
             nowMs = now,
             deviceOwner = policy.isDeviceOwner(),
-            policyEnforced = slice.policyOn,
+            settings = slice.settings,
             events = slice.events,
-            allowMinutes = slice.minutes,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GuardUiState())
 
@@ -56,10 +56,11 @@ class GuardViewModel(application: Application) : AndroidViewModel(application) {
 
     fun grantAllow() {
         viewModelScope.launch {
-            val minutes = state.value.allowMinutes
-            store.grantAllow(minutes * 60_000L)
-            store.append(JournalKind.AllowGranted, "Окно на $minutes мин")
-            if (policy.isDeviceOwner() && state.value.policyEnforced) {
+            val settings = state.value.settings
+            if (settings.forbidDataAllow || settings.allowMinutes <= 0) return@launch
+            store.grantAllow(settings.allowMinutes * 60_000L)
+            store.append(JournalKind.AllowGranted, "Окно на ${settings.allowMinutes} мин")
+            if (policy.isDeviceOwner() && settings.policyEnforced) {
                 policy.unlockData()
             }
         }
@@ -75,31 +76,33 @@ class GuardViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setMinutes(minutes: Int) {
-        viewModelScope.launch { store.setAllowMinutes(minutes) }
+    fun applyPreset(preset: ControlPreset) {
+        viewModelScope.launch {
+            store.applyPreset(preset)
+            syncPolicy(GuardSettings.of(preset))
+        }
     }
 
-    fun setPolicy(on: Boolean) {
+    fun updateSettings(transform: GuardSettings.() -> GuardSettings) {
         viewModelScope.launch {
-            store.setPolicyEnforced(on)
-            store.append(
-                if (on) JournalKind.PolicyOn else JournalKind.PolicyOff,
-                "Принудительная блокировка USB",
-            )
-            if (!policy.isDeviceOwner()) return@launch
-            if (on && !state.value.allow.isActive(System.currentTimeMillis())) {
-                policy.lockData()
-            } else if (!on) {
-                policy.unlockData()
-            }
+            store.updateSettings(transform)
+            syncPolicy(store.currentSettings())
+        }
+    }
+
+    private fun syncPolicy(settings: GuardSettings) {
+        if (!policy.isDeviceOwner()) return
+        if (settings.policyEnforced && !state.value.allow.isActive(System.currentTimeMillis())) {
+            policy.lockData()
+        } else if (!settings.policyEnforced) {
+            policy.unlockData()
         }
     }
 
     private data class PersistSlice(
         val snapshot: UsbSnapshot,
         val allow: AllowWindow,
-        val minutes: Int,
-        val policyOn: Boolean,
+        val settings: GuardSettings,
         val events: List<JournalEvent>,
     )
 }

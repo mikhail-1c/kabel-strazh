@@ -46,6 +46,7 @@
 3. Биометрия / PIN телефона на открытие окна.
 4. Журнал последних 200 событий.
 5. Опция Device Owner: `DISALLOW_USB_FILE_TRANSFER`, `DISALLOW_DEBUGGING_FEATURES`, на Android 12+ ещё `setUsbDataSignalingEnabled(false)`.
+6. Пользовательские настройки и пресеты ужесточения: запрет окна данных, сирена на любой кабель, USB configured как съём, ADB вне окна даже после «разрешить».
 
 ## Дальше
 

@@ -1,6 +1,7 @@
 package ru.kabelstrazh.app.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class GuardUiStateTest {
@@ -36,5 +37,32 @@ class GuardUiStateTest {
             nowMs = 1_000,
         )
         assertEquals(GuardStatus.Allowed, state.status)
+    }
+
+    @Test
+    fun configuredUsbLeaksOnStrictDetection() {
+        val state = GuardUiState(
+            snapshot = UsbSnapshot(connected = true, configured = true),
+            settings = GuardSettings(treatConfiguredAsData = true),
+            nowMs = 1_000,
+        )
+        assertEquals(GuardStatus.DataLeak, state.status)
+    }
+
+    @Test
+    fun adbLeaksEvenInsideAllowWindowWhenCritical() {
+        val state = GuardUiState(
+            snapshot = UsbSnapshot(connected = true, adb = true),
+            allow = AllowWindow(untilEpochMs = 5_000),
+            settings = GuardSettings(treatAdbAsCritical = true),
+            nowMs = 1_000,
+        )
+        assertEquals(GuardStatus.DataLeak, state.status)
+    }
+
+    @Test
+    fun lockdownHidesAllowButton() {
+        val state = GuardUiState(settings = GuardSettings.of(ControlPreset.Lockdown))
+        assertFalse(state.canGrantAllow)
     }
 }

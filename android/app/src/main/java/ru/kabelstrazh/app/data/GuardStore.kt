@@ -8,10 +8,13 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.kabelstrazh.app.domain.AllowWindow
+import ru.kabelstrazh.app.domain.ControlPreset
+import ru.kabelstrazh.app.domain.GuardSettings
 import ru.kabelstrazh.app.domain.JournalEvent
 import ru.kabelstrazh.app.domain.JournalKind
 
@@ -22,22 +25,42 @@ class GuardStore(private val context: Context) {
     private val allowMinutes = intPreferencesKey("allow_minutes")
     private val policyOn = booleanPreferencesKey("policy_on")
     private val journalJson = stringPreferencesKey("journal")
+    private val presetKey = stringPreferencesKey("preset")
+    private val forbidData = booleanPreferencesKey("forbid_data_allow")
+    private val requireAuth = booleanPreferencesKey("require_auth")
+    private val closeOnUnplug = booleanPreferencesKey("close_on_unplug")
+    private val alertOnPlug = booleanPreferencesKey("alert_on_plug")
+    private val configuredAsData = booleanPreferencesKey("configured_as_data")
+    private val adbCritical = booleanPreferencesKey("adb_critical")
+    private val vibrate = booleanPreferencesKey("vibrate")
+    private val fullscreen = booleanPreferencesKey("fullscreen_leak")
 
     val allowWindow: Flow<AllowWindow> = context.guardDataStore.data.map { prefs ->
         AllowWindow(prefs[allowUntil] ?: 0L)
     }
 
-    val allowMinutesFlow: Flow<Int> = context.guardDataStore.data.map { prefs ->
-        prefs[allowMinutes] ?: 5
-    }
-
-    val policyEnforced: Flow<Boolean> = context.guardDataStore.data.map { prefs ->
-        prefs[policyOn] ?: true
+    val settings: Flow<GuardSettings> = context.guardDataStore.data.map { prefs ->
+        GuardSettings(
+            preset = prefs[presetKey]?.let { runCatching { ControlPreset.valueOf(it) }.getOrNull() }
+                ?: ControlPreset.Balanced,
+            allowMinutes = prefs[allowMinutes] ?: 5,
+            forbidDataAllow = prefs[forbidData] ?: false,
+            requireAuthToAllow = prefs[requireAuth] ?: true,
+            closeWindowOnUnplug = prefs[closeOnUnplug] ?: true,
+            alertOnAnyPlug = prefs[alertOnPlug] ?: false,
+            treatConfiguredAsData = prefs[configuredAsData] ?: false,
+            treatAdbAsCritical = prefs[adbCritical] ?: false,
+            vibrateOnAlert = prefs[vibrate] ?: true,
+            fullscreenOnLeak = prefs[fullscreen] ?: true,
+            policyEnforced = prefs[policyOn] ?: true,
+        )
     }
 
     val events: Flow<List<JournalEvent>> = context.guardDataStore.data.map { prefs ->
         parseEvents(prefs[journalJson].orEmpty())
     }
+
+    suspend fun currentSettings(): GuardSettings = settings.first()
 
     suspend fun grantAllow(durationMs: Long) {
         context.guardDataStore.edit { prefs ->
@@ -51,15 +74,37 @@ class GuardStore(private val context: Context) {
         }
     }
 
-    suspend fun setAllowMinutes(minutes: Int) {
-        context.guardDataStore.edit { prefs ->
-            prefs[allowMinutes] = minutes
+    suspend fun applyPreset(preset: ControlPreset) {
+        val next = GuardSettings.of(preset)
+        writeSettings(next)
+        if (next.forbidDataAllow) {
+            clearAllow()
+        }
+        append(JournalKind.PresetApplied, "Пресет: ${presetLabel(preset)}")
+    }
+
+    suspend fun updateSettings(transform: GuardSettings.() -> GuardSettings) {
+        val next = currentSettings().withManualChange(transform)
+        writeSettings(next)
+        append(JournalKind.SettingsChanged, "Настройки: ${presetLabel(next.preset)}")
+        if (next.forbidDataAllow) {
+            clearAllow()
         }
     }
 
-    suspend fun setPolicyEnforced(value: Boolean) {
+    private suspend fun writeSettings(value: GuardSettings) {
         context.guardDataStore.edit { prefs ->
-            prefs[policyOn] = value
+            prefs[presetKey] = value.preset.name
+            prefs[allowMinutes] = value.allowMinutes
+            prefs[forbidData] = value.forbidDataAllow
+            prefs[requireAuth] = value.requireAuthToAllow
+            prefs[closeOnUnplug] = value.closeWindowOnUnplug
+            prefs[alertOnPlug] = value.alertOnAnyPlug
+            prefs[configuredAsData] = value.treatConfiguredAsData
+            prefs[adbCritical] = value.treatAdbAsCritical
+            prefs[vibrate] = value.vibrateOnAlert
+            prefs[fullscreen] = value.fullscreenOnLeak
+            prefs[policyOn] = value.policyEnforced
         }
     }
 
@@ -112,4 +157,11 @@ class GuardStore(private val context: Context) {
         }
         return array.toString()
     }
+}
+
+fun presetLabel(preset: ControlPreset): String = when (preset) {
+    ControlPreset.Balanced -> "Обычный"
+    ControlPreset.Strict -> "Жёсткий"
+    ControlPreset.Lockdown -> "Замок"
+    ControlPreset.Custom -> "Свой набор"
 }

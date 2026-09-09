@@ -14,9 +14,19 @@ object BiometricGate {
             BiometricManager.BIOMETRIC_SUCCESS
     }
 
-    fun confirm(activity: FragmentActivity, onOk: () -> Unit, onFail: () -> Unit = {}) {
-        if (!canPrompt(activity)) {
+    fun confirm(
+        activity: FragmentActivity,
+        requireAuth: Boolean = true,
+        onUnavailable: () -> Unit = {},
+        onOk: () -> Unit,
+        onFail: () -> Unit = {},
+    ) {
+        if (!requireAuth) {
             onOk()
+            return
+        }
+        if (!canPrompt(activity)) {
+            onUnavailable()
             return
         }
         val prompt = BiometricPrompt(
