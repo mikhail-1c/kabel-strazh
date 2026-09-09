@@ -16,9 +16,20 @@ iPhone этим APK не закрыть. Там USB Restricted Mode в сист�
 
 ## Сборка
 
-Откройте папку `android` в Android Studio (SDK 35, JDK 17).
+### Онлайн (GitHub Actions)
 
-Либо из этой папки:
+На этой машине SDK нет — APK собирает GitHub.
+
+1. Запушьте workflow `.github/workflows/android.yml` в репозиторий.
+2. Откройте [Actions](https://github.com/mikhail-1c/kabel-strazh/actions).
+3. Слева **Android** → **Run workflow** → ветка `cursor/android-usb-cable-guard` → **Run workflow**.
+4. Когда зелёное — внизу прогона **Artifacts** → `kabel-strazh-debug` → скачайте zip с `app-debug.apk`.
+
+Тот же job сам стартует на каждый push. Это debug-сборка без вашей подписи: для своего телефона через «установку из неизвестных источников» годится, в Play Store — нет.
+
+### Локально
+
+Откройте папку `android` в Android Studio (SDK 35, JDK 17).
 
 ```text
 cd android
