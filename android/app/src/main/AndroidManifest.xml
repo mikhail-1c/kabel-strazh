@@ -13,21 +13,44 @@
     <application
         android:name=".KabelStrazhApp"
         android:allowBackup="false"
-        android:icon="@drawable/ic_shield"
+        android:icon="@drawable/ic_charge"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.KabelStrazh">
 
         <activity
             android:name=".MainActivity"
+            android:autoRemoveFromRecents="true"
+            android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.KabelStrazh">
+            android:theme="@style/Theme.KabelStrazh" />
+
+        <activity-alias
+            android:name=".LauncherPlain"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/ic_shield"
+            android:label="@string/real_name"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherStealth"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_charge"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".alert.UsbAlertActivity"
@@ -45,7 +68,18 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Watch USB cable and block unattended data transfer" />
+                android:value="USB accessory watch" />
+        </service>
+
+        <service
+            android:name=".tile.GuardTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_charge"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
         </service>
 
         <receiver

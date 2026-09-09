@@ -34,7 +34,7 @@ class UsbGuardService : LifecycleService() {
         Notifications.ensureChannels(this)
         startForeground(
             Notifications.ID_FOREGROUND,
-            Notifications.guard(this, GuardStatus.Idle, "Страж запущен"),
+            Notifications.guard(this, GuardStatus.Idle, "Служба", stealth = true),
         )
         observeUsb()
     }
@@ -66,6 +66,10 @@ class UsbGuardService : LifecycleService() {
                     deviceOwner = policy.isDeviceOwner(),
                     settings = settings,
                 )
+                if (!settings.armed) {
+                    stopSelf()
+                    return@collectLatest
+                }
                 applyPolicy(state)
                 rememberTransitions(snapshot, allow, settings, now)
                 updateNotification(state)
@@ -135,12 +139,16 @@ class UsbGuardService : LifecycleService() {
         val manager = getSystemService(NotificationManager::class.java)
         val remain = state.allow.remainingMs(state.nowMs) / 1000
         val detail = when (state.status) {
+            GuardStatus.Disarmed -> "Выключен"
             GuardStatus.Idle -> "Режим ${presetShort(state.settings)}"
             GuardStatus.ChargeOnly -> "Данные закрыты"
             GuardStatus.Allowed -> "Осталось ${remain}с"
             GuardStatus.DataLeak -> "USB без вашего окна"
         }
-        manager.notify(Notifications.ID_FOREGROUND, Notifications.guard(this, state.status, detail))
+        manager.notify(
+            Notifications.ID_FOREGROUND,
+            Notifications.guard(this, state.status, detail, state.settings.stealthMode),
+        )
     }
 
     private fun raiseLeak(snapshot: UsbSnapshot, settings: GuardSettings) {
@@ -148,14 +156,14 @@ class UsbGuardService : LifecycleService() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(
             Notifications.ID_ALERT,
-            Notifications.leakAlert(this, detail, settings.fullscreenOnLeak),
+            Notifications.leakAlert(this, detail, settings.fullscreenOnLeak, settings.stealthMode),
         )
         vibrateIfNeeded(settings)
     }
 
     private fun raisePlug(settings: GuardSettings) {
         val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(Notifications.ID_PLUG, Notifications.plugAlert(this))
+        manager.notify(Notifications.ID_PLUG, Notifications.plugAlert(this, settings.stealthMode))
         vibrateIfNeeded(settings)
     }
 

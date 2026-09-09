@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Кабель-страж</string>
-    <string name="device_admin_description">Разрешает стражу отключать передачу данных по USB, пока вы сами не откроете окно на несколько минут.</string>
-    <string name="channel_guard">Страж кабеля</string>
-    <string name="channel_alert">Попытка съёма данных</string>
+    <string name="app_name">Заряд</string>
+    <string name="real_name">Кабель-страж</string>
+    <string name="tile_label">USB</string>
+    <string name="device_admin_description">Служба зарядки USB</string>
+    <string name="channel_guard">Служба</string>
+    <string name="channel_alert">Уведомления</string>
 </resources>

@@ -22,7 +22,6 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        askNotifications()
         setContent {
             KabelTheme {
                 GuardApp(viewModel = viewModel)
@@ -30,7 +29,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun askNotifications() {
+    fun askNotifications() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED

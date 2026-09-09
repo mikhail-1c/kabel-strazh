@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.kabelstrazh.app.MainActivity
 import ru.kabelstrazh.app.data.presetLabel
 import ru.kabelstrazh.app.domain.GuardStatus
 import ru.kabelstrazh.app.domain.GuardUiState
@@ -61,6 +62,8 @@ fun GuardApp(viewModel: GuardViewModel) {
             state = state,
             onAllow = viewModel::grantAllow,
             onClose = viewModel::closeAllow,
+            onArm = { viewModel.setArmed(true) },
+            onDisarm = { viewModel.setArmed(false) },
             onJournal = { page = Page.Journal },
             onSettings = { page = Page.Settings },
         )
@@ -72,12 +75,16 @@ private fun GuardScreen(
     state: GuardUiState,
     onAllow: () -> Unit,
     onClose: () -> Unit,
+    onArm: () -> Unit,
+    onDisarm: () -> Unit,
     onJournal: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val activity = LocalContext.current as FragmentActivity
     var confirmOpen by remember { mutableStateOf(false) }
+    val stealth = state.settings.stealthMode
     val accent = when (state.status) {
+        GuardStatus.Disarmed -> Mute
         GuardStatus.Idle -> Mute
         GuardStatus.ChargeOnly -> SafeGreen
         GuardStatus.Allowed -> AllowedBlue
@@ -92,11 +99,17 @@ private fun GuardScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Кабель-страж", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = onSettings) { Text("Настройки") }
+            Text(
+                if (stealth) "Заряд" else "Кабель-страж",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            TextButton(onClick = onSettings) { Text(if (stealth) "Ещё" else "Настройки") }
         }
-        Text("Режим: ${presetLabel(state.settings.preset)}", color = Gold)
-        Text("Чужой ПК без вашего окна получает только заряд.", color = Mute)
+        if (!stealth) {
+            Text("Режим: ${presetLabel(state.settings.preset)}", color = Gold)
+            Text("Страж спит, пока не включите. Чужой ПК без окна получает только заряд.", color = Mute)
+        }
 
         Column(
             modifier = Modifier
@@ -118,12 +131,38 @@ private fun GuardScreen(
             }
         }
 
-        Text("Каналы: ${UsbMonitor.dataChannels(state.snapshot)}", color = Mute)
+        if (state.status == GuardStatus.Disarmed) {
+            Button(
+                onClick = {
+                    (activity as? MainActivity)?.askNotifications()
+                    onArm()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
+            ) {
+                Text("Включить сейчас")
+            }
+            Text(
+                if (stealth) {
+                    "Обычный день: служба не работает. Плитка USB в шторке включает её."
+                } else {
+                    "Выключен: нет службы, нет сирены, кабель обычный. В экстренном случае — эта кнопка или плитка USB в шторке уведомлений."
+                },
+                color = Mute,
+            )
+        } else {
+            OutlinedButton(onClick = onDisarm, modifier = Modifier.fillMaxWidth()) {
+                Text("Выключить")
+            }
+            Text("Каналы: ${UsbMonitor.dataChannels(state.snapshot)}", color = Mute)
+        }
 
         if (state.status == GuardStatus.Allowed) {
             OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
                 Text("Закрыть окно сейчас")
             }
+        } else if (state.status == GuardStatus.Disarmed) {
+            // allow-кнопка только когда страж включён
         } else if (!state.canGrantAllow) {
             Text(
                 "В настройках запрещено открывать данные по кабелю. Снять запрет можно пресетом «Обычный» или «Жёсткий».",
@@ -160,14 +199,18 @@ private fun GuardScreen(
             }
         }
 
-        TextButton(onClick = onJournal) { Text("Журнал подключений") }
-        TextButton(onClick = onSettings) { Text("Ужесточить контроль") }
+        TextButton(onClick = onJournal) { Text(if (stealth) "История" else "Журнал подключений") }
+        if (!stealth) {
+            TextButton(onClick = onSettings) { Text("Ужесточить контроль") }
+        }
         Spacer(Modifier.height(8.dp))
-        Text(
-            "iPhone этим приложением не закрыть: там USB Restricted Mode в самой системе. Android без прав владельца устройства тоже не умеет глушить провод — только заметить съём.",
-            color = Mute,
-            style = MaterialTheme.typography.bodySmall,
-        )
+        if (!stealth) {
+            Text(
+                "iPhone этим приложением не закрыть: там USB Restricted Mode в самой системе. Android без прав владельца устройства тоже не умеет глушить провод — только заметить съём.",
+                color = Mute,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 
     if (confirmOpen) {
@@ -227,6 +270,7 @@ private fun JournalScreen(events: List<JournalEvent>, onBack: () -> Unit) {
 }
 
 private fun statusTitle(status: GuardStatus): String = when (status) {
+    GuardStatus.Disarmed -> "Выключен"
     GuardStatus.Idle -> "Кабеля нет"
     GuardStatus.ChargeOnly -> "Только заряд"
     GuardStatus.Allowed -> "Данные открыты вами"
@@ -234,6 +278,7 @@ private fun statusTitle(status: GuardStatus): String = when (status) {
 }
 
 private fun statusDetail(state: GuardUiState): String = when (state.status) {
+    GuardStatus.Disarmed -> "Служба спит. Кабель никто не сторожит."
     GuardStatus.Idle -> "Можно класть телефон. Страж ждёт провод. Режим: ${presetLabel(state.settings.preset)}."
     GuardStatus.ChargeOnly -> "Питание есть, файлы и отладка не торчат."
     GuardStatus.Allowed -> "Это окно истечёт само. Чужой ПК сейчас может снять данные."
@@ -251,4 +296,6 @@ private fun kindLabel(kind: JournalKind): String = when (kind) {
     JournalKind.PolicyOff -> "Политика выключена"
     JournalKind.PresetApplied -> "Поставлен пресет"
     JournalKind.SettingsChanged -> "Свои настройки"
+    JournalKind.Armed -> "Включён"
+    JournalKind.Disarmed -> "Выключен"
 }

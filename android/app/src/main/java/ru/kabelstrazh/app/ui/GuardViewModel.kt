@@ -18,6 +18,7 @@ import ru.kabelstrazh.app.domain.JournalEvent
 import ru.kabelstrazh.app.domain.JournalKind
 import ru.kabelstrazh.app.domain.UsbSnapshot
 import ru.kabelstrazh.app.policy.UsbPolicy
+import ru.kabelstrazh.app.usb.GuardRuntime
 import ru.kabelstrazh.app.usb.UsbMonitor
 
 class GuardViewModel(application: Application) : AndroidViewModel(application) {
@@ -79,14 +80,27 @@ class GuardViewModel(application: Application) : AndroidViewModel(application) {
     fun applyPreset(preset: ControlPreset) {
         viewModelScope.launch {
             store.applyPreset(preset)
-            syncPolicy(GuardSettings.of(preset))
+            val settings = store.currentSettings()
+            GuardRuntime.sync(getApplication(), settings)
+            syncPolicy(settings)
         }
     }
 
     fun updateSettings(transform: GuardSettings.() -> GuardSettings) {
         viewModelScope.launch {
             store.updateSettings(transform)
-            syncPolicy(store.currentSettings())
+            val settings = store.currentSettings()
+            GuardRuntime.sync(getApplication(), settings)
+            syncPolicy(settings)
+        }
+    }
+
+    fun setArmed(armed: Boolean) {
+        viewModelScope.launch {
+            store.setArmed(armed)
+            val settings = store.currentSettings()
+            GuardRuntime.sync(getApplication(), settings)
+            syncPolicy(settings)
         }
     }
 

@@ -25,7 +25,7 @@ object Notifications {
             NotificationChannel(
                 CHANNEL_GUARD,
                 context.getString(R.string.channel_guard),
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_MIN,
             ),
         )
         manager.createNotificationChannel(
@@ -35,35 +35,43 @@ object Notifications {
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 enableVibration(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             },
         )
     }
 
-    fun guard(context: Context, status: GuardStatus, detail: String): Notification {
+    fun guard(context: Context, status: GuardStatus, detail: String, stealth: Boolean): Notification {
         val tap = PendingIntent.getActivity(
             context,
             0,
             Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val title = when (status) {
-            GuardStatus.Idle -> "Кабель не подключён"
-            GuardStatus.ChargeOnly -> "Только заряд"
-            GuardStatus.Allowed -> "Данные разрешены"
-            GuardStatus.DataLeak -> "Идёт съём данных"
+        val title = if (stealth) {
+            "USB"
+        } else {
+            when (status) {
+                GuardStatus.Disarmed -> "Страж выключен"
+                GuardStatus.Idle -> "Кабель не подключён"
+                GuardStatus.ChargeOnly -> "Только заряд"
+                GuardStatus.Allowed -> "Данные разрешены"
+                GuardStatus.DataLeak -> "Идёт съём данных"
+            }
         }
+        val text = if (stealth) "Служба" else detail
         return NotificationCompat.Builder(context, CHANNEL_GUARD)
-            .setSmallIcon(R.drawable.ic_shield)
+            .setSmallIcon(R.drawable.ic_charge)
             .setContentTitle(title)
-            .setContentText(detail)
+            .setContentText(text)
             .setContentIntent(tap)
             .setOngoing(true)
+            .setSilent(true)
             .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 
-    fun leakAlert(context: Context, detail: String, fullscreen: Boolean = true): Notification {
+    fun leakAlert(context: Context, detail: String, fullscreen: Boolean, stealth: Boolean): Notification {
         val fullScreen = PendingIntent.getActivity(
             context,
             1,
@@ -71,11 +79,12 @@ object Notifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = NotificationCompat.Builder(context, CHANNEL_ALERT)
-            .setSmallIcon(R.drawable.ic_shield)
-            .setContentTitle("Кабель открыл данные без разрешения")
-            .setContentText(detail)
+            .setSmallIcon(R.drawable.ic_charge)
+            .setContentTitle(if (stealth) "USB" else "Кабель открыл данные без разрешения")
+            .setContentText(if (stealth) "Проверьте подключение" else detail)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(if (stealth) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
         if (fullscreen) {
             builder.setFullScreenIntent(fullScreen, true)
@@ -85,7 +94,7 @@ object Notifications {
         return builder.build()
     }
 
-    fun plugAlert(context: Context): Notification {
+    fun plugAlert(context: Context, stealth: Boolean): Notification {
         val tap = PendingIntent.getActivity(
             context,
             2,
@@ -93,11 +102,12 @@ object Notifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(context, CHANNEL_ALERT)
-            .setSmallIcon(R.drawable.ic_shield)
-            .setContentTitle("Вставлен кабель")
-            .setContentText("Проверьте, что данные не открылись")
+            .setSmallIcon(R.drawable.ic_charge)
+            .setContentTitle(if (stealth) "USB" else "Вставлен кабель")
+            .setContentText(if (stealth) "Проверьте подключение" else "Проверьте, что данные не открылись")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(tap)
+            .setVisibility(if (stealth) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .build()
     }

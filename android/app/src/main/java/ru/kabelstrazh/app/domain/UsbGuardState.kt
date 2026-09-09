@@ -20,6 +20,7 @@ data class AllowWindow(
 }
 
 enum class GuardStatus {
+    Disarmed,
     Idle,
     ChargeOnly,
     Allowed,
@@ -44,6 +45,8 @@ enum class JournalKind {
     PolicyOff,
     PresetApplied,
     SettingsChanged,
+    Armed,
+    Disarmed,
 }
 
 data class GuardUiState(
@@ -60,6 +63,7 @@ data class GuardUiState(
 
     val status: GuardStatus
         get() = when {
+            !settings.armed -> GuardStatus.Disarmed
             !snapshot.connected -> GuardStatus.Idle
             snapshot.adb && settings.treatAdbAsCritical -> GuardStatus.DataLeak
             settings.seesData(snapshot) && !allow.isActive(nowMs) -> GuardStatus.DataLeak

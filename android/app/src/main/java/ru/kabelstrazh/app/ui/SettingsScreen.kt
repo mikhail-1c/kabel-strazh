@@ -45,10 +45,31 @@ fun SettingsScreen(
         TextButton(onClick = onBack) { Text("Назад") }
         Text("Настройки", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Пресет сразу переписывает все тумблеры. Потом любой тумблер делает набор своим.",
+            "Пресет сразу переписывает тумблеры контроля. Скрытие и «вкл/выкл» пресет не трогает.",
             color = Mute,
             style = MaterialTheme.typography.bodySmall,
         )
+
+        Section("Дежурство")
+        Toggle(
+            title = "Страж включён",
+            hint = "Выключен — обычный телефон, без службы и сирены. Включайте только когда надо.",
+            checked = settings.armed,
+            onChecked = { onChange { copy(armed = it) } },
+        )
+        Toggle(
+            title = "Скрытый вид",
+            hint = "Снаружи «Заряд» и USB. В шторке не пишет про съём. В недавних не висит.",
+            checked = settings.stealthMode,
+            onChecked = { onChange { copy(stealthMode = it) } },
+        )
+        Toggle(
+            title = "Убрать из меню приложений",
+            hint = "Иконка пропадёт. Открыть можно плитки USB в шторке. Сначала добавьте плитку.",
+            checked = settings.hideLauncherIcon,
+            onChecked = { onChange { copy(hideLauncherIcon = it) } },
+        )
+        Text("Плитка: шторка → редактировать → USB. Нажатие включает страж.", color = Mute, style = MaterialTheme.typography.bodySmall)
 
         Text("Контроль", color = Mute)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

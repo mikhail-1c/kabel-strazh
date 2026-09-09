@@ -19,6 +19,9 @@ data class GuardSettings(
     val vibrateOnAlert: Boolean = true,
     val fullscreenOnLeak: Boolean = true,
     val policyEnforced: Boolean = true,
+    val armed: Boolean = false,
+    val stealthMode: Boolean = true,
+    val hideLauncherIcon: Boolean = false,
 ) {
     fun seesData(snapshot: UsbSnapshot): Boolean {
         if (snapshot.mtp || snapshot.ptp || snapshot.adb) return true

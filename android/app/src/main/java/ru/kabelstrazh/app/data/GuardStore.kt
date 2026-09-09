@@ -34,6 +34,9 @@ class GuardStore(private val context: Context) {
     private val adbCritical = booleanPreferencesKey("adb_critical")
     private val vibrate = booleanPreferencesKey("vibrate")
     private val fullscreen = booleanPreferencesKey("fullscreen_leak")
+    private val armedKey = booleanPreferencesKey("armed")
+    private val stealthKey = booleanPreferencesKey("stealth")
+    private val hideLauncherKey = booleanPreferencesKey("hide_launcher")
 
     val allowWindow: Flow<AllowWindow> = context.guardDataStore.data.map { prefs ->
         AllowWindow(prefs[allowUntil] ?: 0L)
@@ -53,6 +56,9 @@ class GuardStore(private val context: Context) {
             vibrateOnAlert = prefs[vibrate] ?: true,
             fullscreenOnLeak = prefs[fullscreen] ?: true,
             policyEnforced = prefs[policyOn] ?: true,
+            armed = prefs[armedKey] ?: false,
+            stealthMode = prefs[stealthKey] ?: true,
+            hideLauncherIcon = prefs[hideLauncherKey] ?: false,
         )
     }
 
@@ -75,12 +81,22 @@ class GuardStore(private val context: Context) {
     }
 
     suspend fun applyPreset(preset: ControlPreset) {
-        val next = GuardSettings.of(preset)
+        val current = currentSettings()
+        val next = GuardSettings.of(preset).copy(
+            armed = current.armed,
+            stealthMode = current.stealthMode,
+            hideLauncherIcon = current.hideLauncherIcon,
+        )
         writeSettings(next)
         if (next.forbidDataAllow) {
             clearAllow()
         }
         append(JournalKind.PresetApplied, "Пресет: ${presetLabel(preset)}")
+    }
+
+    suspend fun setArmed(armed: Boolean) {
+        writeSettings(currentSettings().copy(armed = armed))
+        append(if (armed) JournalKind.Armed else JournalKind.Disarmed, if (armed) "Страж включён" else "Страж выключен")
     }
 
     suspend fun updateSettings(transform: GuardSettings.() -> GuardSettings) {
@@ -105,6 +121,9 @@ class GuardStore(private val context: Context) {
             prefs[vibrate] = value.vibrateOnAlert
             prefs[fullscreen] = value.fullscreenOnLeak
             prefs[policyOn] = value.policyEnforced
+            prefs[armedKey] = value.armed
+            prefs[stealthKey] = value.stealthMode
+            prefs[hideLauncherKey] = value.hideLauncherIcon
         }
     }
 
