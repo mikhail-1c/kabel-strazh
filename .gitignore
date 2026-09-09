@@ -1,0 +1,21 @@
+# Gradle / Android
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+.cxx/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Secrets
+*.jks
+*.keystore
+.env
